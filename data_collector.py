@@ -3,6 +3,7 @@ import mediapipe as mp
 import numpy as np
 import os
 import csv
+import time # Import time module for delays
 
 # --- Setup MediaPipe Hands ---
 mp_hands = mp.solutions.hands
@@ -43,7 +44,29 @@ print("Press 'q' to quit at any time.")
 
 for gesture_name in gestures:
     print(f"\n--- Collecting data for: {gesture_name} ---")
-    input(f"Press Enter to start collecting {gesture_name} data...") # Wait for user to get ready
+
+    # Display a "Get Ready" message
+    for i in range(3, 0, -1):
+        ret, frame = cap.read()
+        if not ret:
+            print("Failed to grab frame during countdown.")
+            break
+        frame = cv2.flip(frame, 1)
+        cv2.putText(frame, f"GET READY FOR {gesture_name} IN {i}...", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2, cv2.LINE_AA)
+        cv2.imshow('Data Collector', frame)
+        if cv2.waitKey(1000) & 0xFF == ord('q'): # Wait for 1 second
+            print("Quitting data collection during countdown.")
+            cap.release()
+            cv2.destroyAllWindows()
+            exit()
+    
+    # Small delay after countdown for user to finalize pose
+    cv2.putText(frame, f"START {gesture_name} NOW!", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+    cv2.imshow('Data Collector', frame)
+    cv2.waitKey(500) # Show "START" message for half a second
+
 
     count = 0
     csv_file_path = os.path.join(DATA_DIR, f"{gesture_name}.csv")
@@ -59,16 +82,13 @@ for gesture_name in gestures:
         while count < num_samples_per_gesture:
             ret, frame = cap.read()
             if not ret:
-                print("Failed to grab frame.")
+                print("Failed to grab frame during data collection.")
                 break
 
             frame = cv2.flip(frame, 1)
-            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # Convert BGR to RGB for MediaPipe
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(image)
-            
-            # Convert the RGB image back to BGR for OpenCV display.
-            # THIS IS THE LINE THAT HAD THE TYPO:
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR) # CORRECTED LINE
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR) # Corrected line from previous error
 
             if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
@@ -87,11 +107,17 @@ for gesture_name in gestures:
 
             cv2.imshow('Data Collector', image)
 
-            if cv2.waitKey(5) & 0xFF == ord('q'):
+            key = cv2.waitKey(1) & 0xFF # Process events continuously
+            if key == ord('q'):
                 print("Quitting data collection.")
                 cap.release()
                 cv2.destroyAllWindows()
                 exit() # Exit the whole script if 'q' is pressed
+
+            # Add a small delay to avoid consuming 100% CPU and to allow the OS to catch up
+            # This is especially helpful if not enough frames are being processed per second
+            # and 'count' increases too fast
+            # time.sleep(0.001) # Experiment with this value, or remove if not needed
 
         print(f"Finished collecting data for {gesture_name}.")
 
